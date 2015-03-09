@@ -2,7 +2,8 @@
 
 import Tkinter
 from Tkinter import *
-from tkFileDialog import *
+from tkFileDialog import askopenfilename
+from copy import deepcopy
 
 class simpleapp_tk(Tkinter.Tk):
 	def __init__(self,parent, puzzle):
@@ -43,7 +44,7 @@ class simpleapp_tk(Tkinter.Tk):
 		browseLabel.grid(column=11,row=1,columnspan=2,sticky='EW')
 		self.fileName.set("Select File")
 
-		bBrowse = Button(self, text="Select File", command=self.loadFile)
+		bBrowse = Button(self, text="Select", command=self.loadFile)
 		bBrowse.grid(column=11,row=2,columnspan=2 ,sticky='EW')
 
 		self.alg = StringVar(self)
@@ -79,6 +80,13 @@ class Puzzle:
 		self.initgrid = None
 		self.grid = None
 
+	def resetPuzzle(self):
+		for i in range(9):
+			for j in range(9):
+				self.grid[i][j] = self.initgrid[i][j]
+				self.gui.setCell(i,j,self.initgrid[i][j])
+		self.update_gui()
+
 	def setGUI(self, gui):
 		self.gui = gui
 
@@ -91,7 +99,7 @@ class Puzzle:
 		self.gui.update_idletasks()
 
 	def load(self, data):
-		self.initgrid = data
+		self.initgrid = deepcopy(data)
 		self.grid = data
 		for i in range(9):
 			for j in range(9):
@@ -112,9 +120,9 @@ class Puzzle:
 				return False
 		for i in [1, 4, 7]:
 			for j in [1, 4, 7]:
-				tmp =   [ self.grid[i-1][j], self.grid[i][j-1], self.grid[i+1][j]
-						, self.grid[i-1][j],  self.grid[i][j],  self.grid[i+1][j]
-						, self.grid[i-1][j], self.grid[i][j+1], self.grid[i+1][j]]
+				tmp =   [ self.grid[i-1][j-1], self.grid[i][j-1], self.grid[i+1][j-1],
+						  self.grid[i-1][j],  self.grid[i][j],  self.grid[i+1][j],
+						  self.grid[i-1][j+1], self.grid[i][j+1], self.grid[i+1][j+1]]
 				if len(tmp) > len(set(tmp)) and 0 not in tmp:
 					return False
 		return True
@@ -128,19 +136,22 @@ class Puzzle:
 
 		def bf_helper(remaining_list):
 			if not remaining_list:
-				if self.isFull() and self.isSolved():
+				if self.isSolved():
 					return True
-				return False
+				else:
+					return False
 			for i in range(1, 10):
 				self.setCell(remaining_list[0][0], remaining_list[0][1], i)
 				tmp = bf_helper(remaining_list[1:])
 				if tmp:
 					return True
+				self.setCell(remaining_list[0][0], remaining_list[0][1], 0)
 			return False
 
-		return bf_helper(remaining_list)
+		bf_helper(remaining_list)
 
 	def BT(self):
+		self.resetPuzzle()
 		remaining_list = []
 		for i in range(9):
 			for j in range(9):
@@ -156,30 +167,29 @@ class Puzzle:
 					center[i]+=1
 				elif (coord[i]+1)%3 == 0:
 					center[i]-=1
-			blockList = [ self.grid[center[0]-1][center[1]], self.grid[center[0]][center[1]-1], self.grid[center[0]+1][center[1]]
+			blockList = [ self.grid[center[0]-1][center[1]-1], self.grid[center[0]][center[1]-1], self.grid[center[0]+1][center[1]-1]
 						, self.grid[center[0]-1][center[1]],  self.grid[center[0]][center[1]],  self.grid[center[0]+1][center[1]]
-						, self.grid[center[0]-1][center[1]], self.grid[center[0]][center[1]+1], self.grid[center[0]+1][center[1]]]
+						, self.grid[center[0]-1][center[1]+1], self.grid[center[0]][center[1]+1], self.grid[center[0]+1][center[1]+1]]
 			if val in blockList:
 				return False
 			return True
 
-		def bf_helper(remaining_list):
+		def bt_helper(remaining_list):
 			if not remaining_list:
-				if self.isFull() and self.isSolved():
-					print "SOLVED"
-					return True
-				return False
+				return True
 			for i in range(1, 10):
 				if isValidMove(remaining_list[0], i):
 					self.setCell(remaining_list[0][0], remaining_list[0][1], i)
-					tmp = bf_helper(remaining_list[1:])
+					tmp = bt_helper(remaining_list[1:])
 					if tmp:
 						return True
+					self.setCell(remaining_list[0][0], remaining_list[0][1], 0)
 			return False
 
-		return bf_helper(remaining_list)
+		bt_helper(remaining_list)
 
 	def FCMRV(self):
+		self.resetPuzzle()
 		pass
 
 if __name__ == "__main__":
