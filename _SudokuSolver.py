@@ -138,7 +138,7 @@ class Puzzle:
 					return True
 			return False
 
-		return bf_helper(remaining_list)
+		bf_helper(remaining_list)
 
 	def BT(self):
 		remaining_list = []
@@ -177,7 +177,7 @@ class Puzzle:
 						return True
 			return False
 
-		return bf_helper(remaining_list)
+		bf_helper(remaining_list)
 
 	def FCMRV(self):
 		pass
