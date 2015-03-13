@@ -1,12 +1,12 @@
 #!/usr/bin/python
-
+import sys
 import Tkinter
 import timeit
 from Tkinter import *
 from tkFileDialog import askopenfilename
 from copy import deepcopy
 
-class simpleapp_tk(Tkinter.Tk):
+class PuzzleGUI(Tkinter.Tk):
 	"""Main tkinter class for GUI"""
 	def __init__(self,parent, puzzle):
 		"""
@@ -152,10 +152,10 @@ class simpleapp_tk(Tkinter.Tk):
 		"""
 		# If checkbox checked, we tell puzzle to update gui at each cycle
 		if self.guiUpdateEnabled.get():
-			self.puzzle.setGUIUpdateEnabled(True)
+			self.puzzle.setGUIUpdatable(True)
 		# Else we tell puzzle not to update gui at each cycle
 		else:
-			self.puzzle.setGUIUpdateEnabled(False)
+			self.puzzle.setGUIUpdatable(False)
 
 	def loadFile(self):
 		"""
@@ -172,8 +172,6 @@ class simpleapp_tk(Tkinter.Tk):
 		f.close()
 		# Tell puzzle to load the lines found in the file
 		self.puzzle.load(lines)
-		# Finally print the generated puzzle
-		print self.puzzle
 
 	def run(self):
 		"""
@@ -202,8 +200,8 @@ class Puzzle:
 		# setup functions to call based on dropdown text
 		self.algs = { 'BF': self.BF, 'BT': self.BT, 'FC-MRV': self.FCMRV }
 		self.nodesExpanded = 0
-		self.totalRuntime = 0
 		self.algRuntime = 0
+		self.commandLine = False
 
 	def run(self, alg):
 		"""
@@ -212,11 +210,17 @@ class Puzzle:
 		# Get the function to run for the given algorithm alg (string) and run that function
 		self.algs[alg]()
 
-	def setGUIUpdateEnabled(self, checked):
+	def setGUIUpdatable(self, checked):
 		"""
 		Set if the puzzle should update the GUI at each cycle or not
 		"""
 		self.guiUpdateEnabled = checked
+
+	def setCommandLineInstance(self, checked):
+		"""
+		Set if the this is command line version of the puzzle or not
+		"""
+		self.commandLine = checked
 
 	def setNodes(self, nodes):
 		"""
@@ -224,8 +228,9 @@ class Puzzle:
 		"""
 		self.nodesExpanded = nodes
 		# Call gui's setNodes method to set nodes on gui
-		self.gui.setNodes(nodes)
-		self.update_gui()
+		if not self.commandLine:
+			self.gui.setNodes(nodes)
+			self.update_gui()
 
 	def setAlgTime(self, algTime):
 		"""
@@ -233,8 +238,9 @@ class Puzzle:
 		"""
 		self.algRuntime = algTime*1000
 		# Update gui with the algorithm runtime
-		self.gui.setAlgTime(algTime*1000)
-		self.update_gui()
+		if not self.commandLine:
+			self.gui.setAlgTime(algTime*1000)
+			self.update_gui()
 
 	def resetPuzzle(self):
 		"""
@@ -245,8 +251,10 @@ class Puzzle:
 				# Go through each x-y values on 9x9 grid
 				# And set all of them to it's initial state that was taken from file
 				self.grid[i][j] = self.initgrid[i][j]
-				self.gui.setCell(i,j,self.initgrid[i][j])
-		self.update_gui()
+				if not self.commandLine:
+					self.gui.setCell(i,j,self.initgrid[i][j])
+		if not self.commandLine:
+			self.update_gui()
 
 	def setGUI(self, gui):
 		"""
@@ -263,7 +271,7 @@ class Puzzle:
 		if val != 0:
 			# Only update the nodes expanded if we are not resetting the cell value back to 0
 			self.nodesExpanded += 1
-		if updateGUI:
+		if updateGUI and not self.commandLine:
 			# If asked, update the gui with new cell values too
 			self.gui.setCell(x,y,val)
 			self.update_gui()
@@ -340,13 +348,19 @@ class Puzzle:
 			return False
 		return True
 
-	def BF(self):
-		self.resetPuzzle()
+	def getEmptyCells(self):
 		remaining_list = []
 		for i in xrange(9):
 			for j in xrange(9):
 				if self.grid[i][j] == 0:
 					remaining_list.append((i, j))
+		return remaining_list
+
+	def BF(self):
+		self.resetPuzzle()
+		
+		self.setNodes(0)
+		self.setAlgTime(0)
 
 		def bf_helper(remaining_list):
 			if not remaining_list:
@@ -361,44 +375,47 @@ class Puzzle:
 					return True
 				self.setCell(remaining_list[0][0], remaining_list[0][1], 0, self.guiUpdateEnabled)
 			return False
-		self.setNodes(0)
-		self.setAlgTime(0)
+
 		start = timeit.default_timer()
+
+		remaining_list = self.getEmptyCells()
 		bf_helper(remaining_list)
+
 		end = timeit.default_timer()
+
 		self.setAlgTime(end-start)
 		self.setNodes(self.nodesExpanded)
 
 	def BT(self):
 		self.resetPuzzle()
-		remaining_list = []
-		for i in xrange(9):
-			for j in xrange(9):
-				if self.grid[i][j] == 0:
-					remaining_list.append((i, j))
 
 		def bt_helper(remaining_list):
 			if not remaining_list:
 				return True
 			for i in xrange(1, 10):
+				self.setCell(remaining_list[0][0], remaining_list[0][1], i, self.guiUpdateEnabled)
+				self.grid[remaining_list[0][0]][remaining_list[0][1]] = 0
 				if self.isValidMove(remaining_list[0], i):
-					self.setCell(remaining_list[0][0], remaining_list[0][1], i, self.guiUpdateEnabled)
+					self.grid[remaining_list[0][0]][remaining_list[0][1]] = i
 					tmp = bt_helper(remaining_list[1:])
 					if tmp:
 						return True
-					self.setCell(remaining_list[0][0], remaining_list[0][1], 0, self.guiUpdateEnabled)
+				self.setCell(remaining_list[0][0], remaining_list[0][1], 0, self.guiUpdateEnabled)
 			return False
+
 		self.setNodes(0)
 		self.setAlgTime(0)
 		start = timeit.default_timer()
+
+		remaining_list = self.getEmptyCells()
 		bt_helper(remaining_list)
+
 		end = timeit.default_timer()
 		self.setAlgTime(end-start)
 		self.setNodes(self.nodesExpanded)
 
 	def FCMRV(self):
-		self.resetPuzzle()
-		def setUpMRV():
+		def setupMRV():
 			remaining = {}
 			for i in xrange(9):
 				for j in xrange(9):
@@ -450,11 +467,14 @@ class Puzzle:
 			remaining[lowest] = lowest_val
 			return False
 
-		mrv_dict = setUpMRV()
 		self.setNodes(0)
 		self.setAlgTime(0)
 		start = timeit.default_timer()
+
+		self.resetPuzzle()
+		mrv_dict = setupMRV()
 		fcmrv_helper(mrv_dict)
+
 		end = timeit.default_timer()
 		self.setAlgTime(end-start)
 		self.setNodes(self.nodesExpanded)
@@ -467,8 +487,72 @@ class Puzzle:
 			s+= "-------------------------------------\n"
 		return s
 
+class PuzzleCommandLine(object):
+	"""To run puzzle from command line"""
+	def __init__(self, puzzle):
+		super(PuzzleCommandLine, self).__init__()
+		self.puzzle = puzzle
+
+	def load(self, fname):
+		# Open the file
+		f = open(fname, "r")
+		# Put all contents of the file in lines variable
+		lines = [map(int, line.strip().split(' ')) for line in f]			
+		f.close()
+		# Tell puzzle to load the lines found in the file
+		self.puzzle.load(lines)
+
+	def run(self, fname, alg):
+		self.time = 0
+		start = timeit.default_timer()
+
+		self.load(fname)
+		self.puzzle.run(alg)
+
+		end = timeit.default_timer()
+		self.time = (end-start)*1000
+
+	def save(self, fin):
+		with open(fin.replace("puzzle","solution"), 'w') as fout:
+			for row in self.puzzle.grid:
+				fout.write(' '.join(map(str, row))+'\n')
+		with open(fin.replace("puzzle","performance"), 'w') as fout:
+			s = "Total clock time: "+str(self.time)
+			s+= "\nSearch clock time: "+str(self.puzzle.algRuntime)
+			s+= "\nNumber of nodes generated: "+str(self.puzzle.nodesExpanded)
+			fout.write(s)
+
+	def __str__(self):
+		"""
+		>>> Total clock time: 1000.00
+		    Search clock time: 800.00
+		    Number of nodes generated: 500
+		"""
+		s = str(puzzle)
+		s+= "\nTotal clock time: "+str(self.time)
+		s+= "\nSearch clock time: "+str(self.puzzle.algRuntime)
+		s+= "\nNumber of nodes generated: "+str(self.puzzle.nodesExpanded)
+		return s
+
 if __name__ == "__main__":
 	puzzle = Puzzle()
-	app = simpleapp_tk(None, puzzle)
-	app.title('Sudoku')
-	app.mainloop()
+	if len(sys.argv) == 1:
+		app = PuzzleGUI(None, puzzle)
+		app.title('Sudoku')
+		app.mainloop()
+	else:
+		puzzle.setGUIUpdatable(False)
+		puzzle.setCommandLineInstance(True)
+		pi = PuzzleCommandLine(puzzle)
+		pi.run(sys.argv[1], sys.argv[2])
+		print pi
+		pi.save(sys.argv[1])
+
+
+
+
+
+
+
+
+
