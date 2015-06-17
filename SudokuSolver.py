@@ -187,6 +187,7 @@ class PuzzleGUI(Tkinter.Tk):
 		self.setTotalTime((end - start)*1000)
 		# print the solved final puzzle
 		print self.puzzle
+		self.puzzle.setPuzzle(self.puzzle.grid)
 
 class Puzzle:
 	"""Puzzle class that has 9x9 grid and solving algorithms"""
@@ -242,17 +243,17 @@ class Puzzle:
 			self.gui.setAlgTime(algTime*1000)
 			self.update_gui()
 
-	def resetPuzzle(self):
+	def setPuzzle(self, puzzle_grid):
 		"""
-		Reset the puzzle to it's initial state
+		set the puzzle to it's given state
 		"""
 		for i in range(9):
 			for j in range(9):
 				# Go through each x-y values on 9x9 grid
-				# And set all of them to it's initial state that was taken from file
-				self.grid[i][j] = self.initgrid[i][j]
+				# And set all of them to given state
+				self.grid[i][j] = puzzle_grid[i][j]
 				if not self.commandLine:
-					self.gui.setCell(i,j,self.initgrid[i][j])
+					self.gui.setCell(i,j,puzzle_grid[i][j])
 		if not self.commandLine:
 			self.update_gui()
 
@@ -295,15 +296,6 @@ class Puzzle:
 				# Set the cells on the GUI with file data
 				self.setCell(i,j, self.grid[i][j], True)
 
-	def isFull(self):
-		"""
-		Returns True if puzzle is full (not necessarily valid) else False
-		"""
-		for item in self.grid:
-			if 0 in item:
-				return False
-		return True
-
 	def isSolved(self):
 		"""
 		Return true if the puzzle has been solved else return False
@@ -335,71 +327,110 @@ class Puzzle:
 		if val in self.grid[coord[0]] or val in zip(*self.grid)[coord[1]]:
 			return False
 
+		# Find the center of the block the coordinate is on
 		center = [coord[0], coord[1]]
 		for i in range(2):
+			# We can find out if coordinate is on left or right/top or bottom side of the center
 			if (coord[i]+1)%3 == 1:
 				center[i]+=1
 			elif (coord[i]+1)%3 == 0:
 				center[i]-=1
+		# Create list of values in the block
 		blockList = [ self.grid[center[0]-1][center[1]-1], self.grid[center[0]][center[1]-1], self.grid[center[0]+1][center[1]-1]
 					, self.grid[center[0]-1][center[1]],  self.grid[center[0]][center[1]],  self.grid[center[0]+1][center[1]]
 					, self.grid[center[0]-1][center[1]+1], self.grid[center[0]][center[1]+1], self.grid[center[0]+1][center[1]+1]]
+		# Make sure values arent in the block
 		if val in blockList:
 			return False
 		return True
 
 	def getEmptyCells(self):
+		"""
+		Returns list of x,y coordinate tuples that are empty
+		"""
 		remaining_list = []
 		for i in xrange(9):
 			for j in xrange(9):
+				# The cell is empty if its value is 0
 				if self.grid[i][j] == 0:
 					remaining_list.append((i, j))
 		return remaining_list
 
 	def BF(self):
-		self.resetPuzzle()
-		
+		"""
+		Bruteforce algorithm
+		"""
+		self.setPuzzle(self.initgrid)
+
 		self.setNodes(0)
 		self.setAlgTime(0)
 
 		def bf_helper(remaining_list):
+			"""
+			Recursive function to Find the solution by Bruteforce
+			"""
+			# If no empty cells remain, the puzzle is Full
 			if not remaining_list:
+				# If the puzzle is solved, we return True; else False
 				if self.isSolved():
 					return True
 				else:
 					return False
+			# We try all values from 1 to 9 on the first cell of remaining_list
 			for i in xrange(1, 10):
+				# Set the first cell to i
 				self.setCell(remaining_list[0][0], remaining_list[0][1], i, self.guiUpdateEnabled)
+				# Try runnning the algorithm recursively on rest of the cells
 				tmp = bf_helper(remaining_list[1:])
+				# If it succeeds, we return true
 				if tmp:
 					return True
+				# Else we set the value back to 0 and visit next node
 				self.setCell(remaining_list[0][0], remaining_list[0][1], 0, self.guiUpdateEnabled)
 			return False
 
 		start = timeit.default_timer()
 
+		# Setup empty cells and call recursive algorithm
 		remaining_list = self.getEmptyCells()
 		bf_helper(remaining_list)
 
 		end = timeit.default_timer()
 
+		# Set total nodecount and runtime
 		self.setAlgTime(end-start)
 		self.setNodes(self.nodesExpanded)
 
 	def BT(self):
-		self.resetPuzzle()
+		"""
+		Backtracking algorithm
+		"""
+		self.setPuzzle(self.initgrid)
 
 		def bt_helper(remaining_list):
+			"""
+			Backtracking recursive algorithm to find solution
+			"""
+			# If no nodes remaining, the puzzle is full
 			if not remaining_list:
 				return True
+			# Try all values from 1 to 9 on first cell of remaining_list
 			for i in xrange(1, 10):
+				# Set the cell to i
 				self.setCell(remaining_list[0][0], remaining_list[0][1], i, self.guiUpdateEnabled)
+				# We set grid to 0 temporarily
+				# We do this so isValidMove function runs faster since it wont have to ignore its current location
 				self.grid[remaining_list[0][0]][remaining_list[0][1]] = 0
+				# Check if i is valid at the current cell
 				if self.isValidMove(remaining_list[0], i):
+					# If valid, we set grid to i
 					self.grid[remaining_list[0][0]][remaining_list[0][1]] = i
+					# Run Bruteforce recursively
 					tmp = bt_helper(remaining_list[1:])
+					# If this solves puzzle, return true
 					if tmp:
 						return True
+				# If its not valid or if it doesnt solve the puzzle, we set the cell back to 0
 				self.setCell(remaining_list[0][0], remaining_list[0][1], 0, self.guiUpdateEnabled)
 			return False
 
@@ -407,18 +438,31 @@ class Puzzle:
 		self.setAlgTime(0)
 		start = timeit.default_timer()
 
+		# Generate empty cells list and call recursive function
 		remaining_list = self.getEmptyCells()
 		bt_helper(remaining_list)
 
 		end = timeit.default_timer()
+		
+		# Set total nodes and runtime
 		self.setAlgTime(end-start)
 		self.setNodes(self.nodesExpanded)
 
 	def FCMRV(self):
+		"""
+		Forward Checking algorithm with Minimum Remaining Value Heuristics
+		"""
+		self.setPuzzle(self.initgrid)
+
 		def setupMRV():
+			"""
+			Initial setup of MRV
+			"""
 			remaining = {}
+			# Go through each cell in grid
 			for i in xrange(9):
 				for j in xrange(9):
+					# If the cell is empty, we need to add it to dict
 					if self.grid[i][j] == 0:
 						center = [i, j]
 						for k in range(2):
@@ -426,43 +470,70 @@ class Puzzle:
 								center[k]+=1
 							elif (center[k]+1)%3 == 0:
 								center[k]-=1
+						# We find all valid values for the cell and add them to dictionary for heuristics
+						# We also add center to improve speed (we wont need to manually check for the block this belongs to)
 						remaining[(i, j)] = [[k for k in xrange(1,10) if self.isValidMove((i, j), k)], center]
 			return remaining
 
 		def getLowestMRV(mrv):
-			return min(mrv, key=lambda item: len(mrv.get(item)[0])) if len(mrv) > 0 else 0
+			"""
+			Return lowest MRV value in the dictionary
+			"""
+			return min(mrv, key=lambda item: len(mrv.get(item)[0])) if len(mrv) > 0 else False
 
 		def useMRV(remaining, key, val, i):
+			"""
+			Removes i from heuristics of cells that are in same rows, columns and blocks
+			"""
 			removed_list = []
+			# Go over all collected heuristics
 			for ik, iv in remaining.iteritems():
+				# See if the cell is in the same row, column or block of the current cell
 				if ik[0]==key[0] or ik[1]==key[1] or val[1] == iv[1]:
-					try:
+					if i in iv[0]:
+						# remove i from the list of possible values
 						iv[0].remove(i)
 						removed_list.append(ik)
+						# We check if the possible values at ik are empty after removing val
 						if not iv[0]:
+							# If so, we cannot use this val for the current cell
+							# We put back all removed values and return false
 							setMRVback(remaining, removed_list, i)
 							return False
-					except ValueError:
-						pass
 			return removed_list
 
 		def setMRVback(mrv, removed_list, i):
+			"""
+			Puts back all removed values back into the heuristics
+			"""
 			for item in removed_list:
 				mrv.get(item)[0].append(i)
 
 		def fcmrv_helper(remaining):
+			"""
+			Recursive function that uses FC with MRV to find a solution
+			"""
+			# Get the cell with minimum remaining value
 			lowest = getLowestMRV(remaining)
-			if lowest == 0:
+			# if we could not find lowest, we have used up all values and found a solution
+			if not lowest:
 				return True
+			# Get the value at cell, which has list of list of possible values and center coordinates and remove the pair
 			lowest_val = remaining.pop(lowest, None)
+			# Try all possible values from the list
 			for i in lowest_val[0]:
+				# Set cell to i
 				self.setCell(lowest[0], lowest[1], i, self.guiUpdateEnabled)
+				# call useMRV to remove i from its row,column and block
 				removed_list = useMRV(remaining, lowest, lowest_val, i)
+				# If there was no domain wipeout, move ahead
 				if removed_list is not False:
-					tmp = fcmrv_helper(remaining)
-					if tmp:
+					# Try recursively on rest of remaining values, if it returns solution, return true
+					if fcmrv_helper(remaining):
 						return True
+					# If it doesnt work, we put all removed values back
 					setMRVback(remaining, removed_list, i)
+				# If i is no good for current cell, we set the cell back to 0
 				self.setCell(lowest[0], lowest[1], 0, self.guiUpdateEnabled)
 			remaining[lowest] = lowest_val
 			return False
@@ -471,15 +542,20 @@ class Puzzle:
 		self.setAlgTime(0)
 		start = timeit.default_timer()
 
-		self.resetPuzzle()
-		mrv_dict = setupMRV()
-		fcmrv_helper(mrv_dict)
+		# Set up MRV heuristic
+		mrv_heuristics = setupMRV()
+		fcmrv_helper(mrv_heuristics)
 
 		end = timeit.default_timer()
+		
+		# Set node count and runtime
 		self.setAlgTime(end-start)
 		self.setNodes(self.nodesExpanded)
 
 	def __str__(self):
+		"""
+		Return string with all rows in the Puzzle
+		"""
 		s = 'Sudoku grid:\n'
 		s+= "-------------------------------------\n"
 		for row in self.grid:
@@ -488,12 +564,19 @@ class Puzzle:
 		return s
 
 class PuzzleCommandLine(object):
-	"""To run puzzle from command line"""
+	"""Run puzzle from command line"""
+
 	def __init__(self, puzzle):
-		super(PuzzleCommandLine, self).__init__()
+		"""
+		Init class
+		"""
+		# Set puzzle to play with
 		self.puzzle = puzzle
 
 	def load(self, fname):
+		"""
+		Loads file into the puzzle
+		"""
 		# Open the file
 		f = open(fname, "r")
 		# Put all contents of the file in lines variable
@@ -503,16 +586,25 @@ class PuzzleCommandLine(object):
 		self.puzzle.load(lines)
 
 	def run(self, fname, alg):
+		"""
+		Runs given algorithm alg on file fname
+		"""
+		# Note: Total time also includes file read time
 		self.time = 0
 		start = timeit.default_timer()
 
+		# Load the file and run algorithm alg on it
 		self.load(fname)
 		self.puzzle.run(alg)
 
 		end = timeit.default_timer()
+		# Set total runtime
 		self.time = (end-start)*1000
 
 	def save(self, fin):
+		"""
+		Saves the solution and performance of the given puzzle
+		"""
 		with open(fin.replace("puzzle","solution"), 'w') as fout:
 			for row in self.puzzle.grid:
 				fout.write(' '.join(map(str, row))+'\n')
@@ -524,6 +616,7 @@ class PuzzleCommandLine(object):
 
 	def __str__(self):
 		"""
+		Returns string with puzzle, total time, search time and total nodes
 		>>> Total clock time: 1000.00
 		    Search clock time: 800.00
 		    Number of nodes generated: 500
@@ -536,23 +629,22 @@ class PuzzleCommandLine(object):
 
 if __name__ == "__main__":
 	puzzle = Puzzle()
+
+	# Check if to use GUI or command line
 	if len(sys.argv) == 1:
 		app = PuzzleGUI(None, puzzle)
 		app.title('Sudoku')
 		app.mainloop()
 	else:
+		# Make sure gui updates are off for puzzle
 		puzzle.setGUIUpdatable(False)
 		puzzle.setCommandLineInstance(True)
+
+		# Create class to run puzzle without gui
 		pi = PuzzleCommandLine(puzzle)
+		# Run it on given file and algorithm
 		pi.run(sys.argv[1], sys.argv[2])
+		# Print out the result
 		print pi
+		# Save results to files
 		pi.save(sys.argv[1])
-
-
-
-
-
-
-
-
-
